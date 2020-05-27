@@ -15,16 +15,46 @@
 
 static const char* DATABASE_FILENAME = "wallet.dat";
 
+static Mutex g_sqlite_mutex;
+static int g_sqlite_count GUARDED_BY(g_sqlite_mutex) = 0;
+
+static void ErrorLogCallback(void* arg, int code, const char* msg)
+{
+    assert(arg == nullptr); // That's what we tell it to do during the setup
+    LogPrintf("SQLite Error. Code: %d. Message: %s\n", code, msg);
+}
+
 SQLiteDatabase::SQLiteDatabase(const fs::path& dir_path, const fs::path& file_path, bool mock) :
     WalletDatabase(), m_mock(mock), m_dir_path(dir_path.string()), m_file_path(file_path.string())
 {
+    LOCK(g_sqlite_mutex);
     LogPrintf("Using SQLite Version %s\n", SQLiteDatabaseVersion());
     LogPrintf("Using wallet %s\n", m_dir_path);
+
+    if (++g_sqlite_count == 1) {
+        // Setup logging
+        int ret = sqlite3_config(SQLITE_CONFIG_LOG, ErrorLogCallback, nullptr);
+        if (ret != SQLITE_OK) {
+            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to setup error log: %s\n", sqlite3_errstr(ret)));
+        }
+    }
+    int ret = sqlite3_initialize(); // This is a no-op if sqlite3 is already initialized
+    if (ret != SQLITE_OK) {
+        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to initialize SQLite: %s\n", sqlite3_errstr(ret)));
+    }
 }
 
 SQLiteDatabase::~SQLiteDatabase()
 {
     Close();
+
+    LOCK(g_sqlite_mutex);
+    if (--g_sqlite_count == 0) {
+        int ret = sqlite3_shutdown();
+        if (ret != SQLITE_OK) {
+            LogPrintf("SQLiteDatabase: Failed to shutdown SQLite: %s\n", sqlite3_errstr(ret));
+        }
+    }
 }
 
 void SQLiteDatabase::Open(const char* pszMode)
