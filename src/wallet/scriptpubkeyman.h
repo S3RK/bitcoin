@@ -615,6 +615,9 @@ public:
 
     const WalletDescriptor GetWalletDescriptor() const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
     const std::vector<CScript> GetScriptPubKeys() const;
+
+    void UpdateWalletDescriptor(WalletDescriptor& descriptor);
+    bool CanUpdateToWalletDescriptor(WalletDescriptor& descriptor, std::string& error);
 };
 
 #endif // BITCOIN_WALLET_SCRIPTPUBKEYMAN_H

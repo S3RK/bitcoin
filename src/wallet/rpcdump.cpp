@@ -1530,9 +1530,8 @@ static UniValue ProcessDescriptorImport(CWallet * const pwallet, const UniValue&
         // Check if the wallet already contains the descriptor
         auto existing_spk_manager = pwallet->GetDescriptorScriptPubKeyMan(w_desc);
         if (existing_spk_manager) {
-            LOCK(existing_spk_manager->cs_desc_man);
-            if (range_start > existing_spk_manager->GetWalletDescriptor().range_start) {
-                throw JSONRPCError(RPC_INVALID_PARAMS, strprintf("range_start can only decrease; current range = [%d,%d]", existing_spk_manager->GetWalletDescriptor().range_start, existing_spk_manager->GetWalletDescriptor().range_end));
+            if (!existing_spk_manager->CanUpdateToWalletDescriptor(w_desc, error)) {
+                throw JSONRPCError(RPC_INVALID_PARAMS, error);
             }
         }
 

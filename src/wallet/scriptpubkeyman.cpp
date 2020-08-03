@@ -1836,6 +1836,10 @@ void DescriptorScriptPubKeyMan::MarkUnusedAddresses(const CScript& script)
 void DescriptorScriptPubKeyMan::AddDescriptorKey(const CKey& key, const CPubKey &pubkey)
 {
     LOCK(cs_desc_man);
+    if (m_map_keys.find(pubkey.GetID()) != m_map_keys.end()) {
+        return;
+    }
+
     WalletBatch batch(m_storage.GetDatabase());
     if (!AddDescriptorKeyWithDB(batch, key, pubkey)) {
         throw std::runtime_error(std::string(__func__) + ": writing descriptor private key failed");
@@ -2253,4 +2257,39 @@ const std::vector<CScript> DescriptorScriptPubKeyMan::GetScriptPubKeys() const
         script_pub_keys.push_back(script_pub_key.first);
     }
     return script_pub_keys;
+}
+
+void DescriptorScriptPubKeyMan::UpdateWalletDescriptor(WalletDescriptor& descriptor)
+{
+    LOCK(cs_desc_man);
+    std::string error;
+    if (!CanUpdateToWalletDescriptor(descriptor, error)) {
+        throw std::runtime_error(std::string(__func__) + ": " + error);
+    }
+
+    m_map_pubkeys.clear();
+    m_map_script_pub_keys.clear();
+    m_max_cached_index = -1;
+    m_wallet_descriptor = descriptor;
+}
+
+bool DescriptorScriptPubKeyMan::CanUpdateToWalletDescriptor(WalletDescriptor& descriptor, std::string& error)
+{
+    LOCK(cs_desc_man);
+    if (!HasWalletDescriptor(descriptor)) {
+        error = "can only update matching descriptor";
+        return false;
+    }
+    // Use inclusive range for error
+    auto range = strprintf("current range = [%d,%d]", m_wallet_descriptor.range_start, m_wallet_descriptor.range_end-1);
+    if (descriptor.range_start > m_wallet_descriptor.range_start) {
+        error = "range_start can only decrease; " + range;
+        return false;
+    }
+    if (descriptor.range_end < m_wallet_descriptor.range_end) {
+        error = "range_end can only increase; " + range;
+        return false;
+    }
+
+    return true;
 }
