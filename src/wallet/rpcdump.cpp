@@ -1531,7 +1531,7 @@ static UniValue ProcessDescriptorImport(CWallet * const pwallet, const UniValue&
         auto existing_spk_manager = pwallet->GetDescriptorScriptPubKeyMan(w_desc);
         if (existing_spk_manager) {
             if (!existing_spk_manager->CanUpdateToWalletDescriptor(w_desc, error)) {
-                throw JSONRPCError(RPC_INVALID_PARAMS, error);
+                throw JSONRPCError(RPC_INVALID_PARAMETER, error);
             }
         }
 
@@ -1554,10 +1554,9 @@ static UniValue ProcessDescriptorImport(CWallet * const pwallet, const UniValue&
     } catch (const UniValue& e) {
         result.pushKV("success", UniValue(false));
         result.pushKV("error", e);
-    } catch (...) {
+    } catch (const std::runtime_error& e) {
         result.pushKV("success", UniValue(false));
-
-        result.pushKV("error", JSONRPCError(RPC_MISC_ERROR, "Missing required fields"));
+        result.pushKV("error", JSONRPCError(RPC_MISC_ERROR, e.what()));
     }
     if (warnings.size()) result.pushKV("warnings", warnings);
     return result;
