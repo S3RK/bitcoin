@@ -1836,10 +1836,6 @@ void DescriptorScriptPubKeyMan::MarkUnusedAddresses(const CScript& script)
 void DescriptorScriptPubKeyMan::AddDescriptorKey(const CKey& key, const CPubKey &pubkey)
 {
     LOCK(cs_desc_man);
-    if (m_map_keys.find(pubkey.GetID()) != m_map_keys.end()) {
-        return;
-    }
-
     WalletBatch batch(m_storage.GetDatabase());
     if (!AddDescriptorKeyWithDB(batch, key, pubkey)) {
         throw std::runtime_error(std::string(__func__) + ": writing descriptor private key failed");
@@ -1850,6 +1846,12 @@ bool DescriptorScriptPubKeyMan::AddDescriptorKeyWithDB(WalletBatch& batch, const
 {
     AssertLockHeld(cs_desc_man);
     assert(!m_storage.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS));
+
+    // Check if provided key already exists
+    if (m_map_keys.find(pubkey.GetID()) != m_map_keys.end() ||
+        m_map_crypted_keys.find(pubkey.GetID()) != m_map_crypted_keys.end()) {
+        return true;
+    }
 
     if (m_storage.HasEncryptionKeys()) {
         if (m_storage.IsLocked()) {
