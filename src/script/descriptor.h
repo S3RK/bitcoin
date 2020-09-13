@@ -75,6 +75,8 @@ public:
  * doc/descriptors.md.
  */
 struct Descriptor {
+	virtual bool operator==(Descriptor& rhs) const = 0;
+
     virtual ~Descriptor() = default;
 
     /** Whether the expansion of this descriptor depends on the position. */

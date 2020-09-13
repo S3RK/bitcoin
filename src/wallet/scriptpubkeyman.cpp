@@ -2232,7 +2232,8 @@ bool DescriptorScriptPubKeyMan::AddCryptedKey(const CKeyID& key_id, const CPubKe
 bool DescriptorScriptPubKeyMan::HasWalletDescriptor(const WalletDescriptor& desc) const
 {
     LOCK(cs_desc_man);
-    return m_wallet_descriptor.descriptor != nullptr && desc.descriptor != nullptr && m_wallet_descriptor.descriptor->ToString() == desc.descriptor->ToString();
+//    return m_wallet_descriptor.descriptor != nullptr && desc.descriptor != nullptr && m_wallet_descriptor.descriptor->ToString() == desc.descriptor->ToString();
+    return m_wallet_descriptor.descriptor != nullptr && desc.descriptor != nullptr && *m_wallet_descriptor.descriptor == *desc.descriptor;
 }
 
 void DescriptorScriptPubKeyMan::WriteDescriptor()

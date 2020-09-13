@@ -332,7 +332,7 @@ class ImportDescriptorsTest(BitcoinTestFramework):
         assert_raises_rpc_error(-4, 'This wallet has no available keys', w1.getrawchangeaddress, 'legacy')
 
         self.log.info('Check can activate inactive descriptor')
-        self.test_importdesc({'desc': descsum_create('pkh([12345678]' + xpub + '/*)'),
+        self.test_importdesc({'desc': descsum_create('pkh(' + xpub + '/*)'),
                               'range': [0, 5],
                               'active': True,
                               'timestamp': 'now',

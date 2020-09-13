@@ -181,6 +181,12 @@ public:
 
     /** Derive a private key, if private data is available in arg. */
     virtual bool GetPrivKey(int pos, const SigningProvider& arg, CKey& key) const = 0;
+
+    virtual bool operator==(PubkeyProvider& rhs) const = 0;
+
+    bool operator!=(PubkeyProvider& rhs) const {
+        return !operator==(rhs);
+    };
 };
 
 class OriginPubkeyProvider final : public PubkeyProvider
@@ -194,6 +200,9 @@ class OriginPubkeyProvider final : public PubkeyProvider
     }
 
 public:
+    bool operator==(PubkeyProvider& rhs) const override {
+        return *m_provider == rhs;
+    }
     OriginPubkeyProvider(uint32_t exp_index, KeyOriginInfo info, std::unique_ptr<PubkeyProvider> provider) : PubkeyProvider(exp_index), m_origin(std::move(info)), m_provider(std::move(provider)) {}
     bool GetPubKey(int pos, const SigningProvider& arg, CPubKey& key, KeyOriginInfo& info, const DescriptorCache* read_cache = nullptr, DescriptorCache* write_cache = nullptr) override
     {
@@ -224,6 +233,15 @@ class ConstPubkeyProvider final : public PubkeyProvider
     CPubKey m_pubkey;
 
 public:
+    bool operator==(PubkeyProvider& rhs) const override {
+        auto r = dynamic_cast<ConstPubkeyProvider*>(&rhs);
+        if (r == nullptr) {
+            return false;
+        }
+
+        return m_pubkey == r->m_pubkey;
+    }
+
     ConstPubkeyProvider(uint32_t exp_index, const CPubKey& pubkey) : PubkeyProvider(exp_index), m_pubkey(pubkey) {}
     bool GetPubKey(int pos, const SigningProvider& arg, CPubKey& key, KeyOriginInfo& info, const DescriptorCache* read_cache = nullptr, DescriptorCache* write_cache = nullptr) override
     {
@@ -298,6 +316,15 @@ class BIP32PubkeyProvider final : public PubkeyProvider
     }
 
 public:
+    bool operator==(PubkeyProvider& rhs) const override {
+        auto r = dynamic_cast<BIP32PubkeyProvider*>(&rhs);
+        if (r == nullptr) {
+            return false;
+        }
+
+        return m_root_extkey == r->m_root_extkey && m_path == r->m_path && m_derive == r->m_derive;
+    }
+
     BIP32PubkeyProvider(uint32_t exp_index, const CExtPubKey& extkey, KeyPath path, DeriveType derive) : PubkeyProvider(exp_index), m_root_extkey(extkey), m_path(std::move(path)), m_derive(derive) {}
     bool IsRange() const override { return m_derive != DeriveType::NO; }
     size_t GetSize() const override { return 33; }
@@ -430,6 +457,36 @@ protected:
 public:
     DescriptorImpl(std::vector<std::unique_ptr<PubkeyProvider>> pubkeys, std::unique_ptr<DescriptorImpl> script, const std::string& name) : m_pubkey_args(std::move(pubkeys)), m_name(name), m_subdescriptor_arg(std::move(script)) {}
 
+    bool operator==(Descriptor & rhs ) const override
+    {
+        auto r = dynamic_cast<DescriptorImpl*>(&rhs);
+        if (r == nullptr) {
+            return false;
+        }
+
+       if (m_name != r->m_name) {
+            return false;
+       }
+
+       if (m_pubkey_args.size() != r->m_pubkey_args.size()) {
+           return false;
+       }
+
+       for (int i = 0; i < m_pubkey_args.size(); i++) {
+            if (*m_pubkey_args[i] != *r->m_pubkey_args[i]) {
+                return false;
+            }
+       }
+
+       if (m_subdescriptor_arg != nullptr && r->m_subdescriptor_arg != nullptr) {
+            return *m_subdescriptor_arg == *r->m_subdescriptor_arg;
+       } else {
+            return m_subdescriptor_arg == nullptr && r->m_subdescriptor_arg == nullptr;
+       }
+
+       return true;
+    }
+
     bool IsSolvable() const override
     {
         if (m_subdescriptor_arg) {
@@ -560,6 +617,16 @@ protected:
     std::string ToStringExtra() const override { return EncodeDestination(m_destination); }
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript*, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(m_destination)); }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<AddressDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return m_destination == rightAddress->m_destination;
+    }
+
     AddressDescriptor(CTxDestination destination) : DescriptorImpl({}, {}, "addr"), m_destination(std::move(destination)) {}
     bool IsSolvable() const final { return false; }
 
@@ -586,6 +653,16 @@ protected:
     std::string ToStringExtra() const override { return HexStr(m_script); }
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript*, FlatSigningProvider&) const override { return Vector(m_script); }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<RawDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return m_script == rightAddress->m_script;
+    }
+
     RawDescriptor(CScript script) : DescriptorImpl({}, {}, "raw"), m_script(std::move(script)) {}
     bool IsSolvable() const final { return false; }
 
@@ -612,6 +689,16 @@ class PKDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>& keys, const CScript*, FlatSigningProvider&) const override { return Vector(GetScriptForRawPubKey(keys[0])); }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<PKDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     PKDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "pk") {}
     bool IsSingleType() const final { return true; }
 };
@@ -627,6 +714,16 @@ protected:
         return Vector(GetScriptForDestination(PKHash(id)));
     }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<PKHDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     PKHDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "pkh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::LEGACY; }
     bool IsSingleType() const final { return true; }
@@ -643,6 +740,16 @@ protected:
         return Vector(GetScriptForDestination(WitnessV0KeyHash(id)));
     }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<WPKHDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     WPKHDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "wpkh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::BECH32; }
     bool IsSingleType() const final { return true; }
@@ -668,6 +775,16 @@ protected:
         return ret;
     }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<ComboDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     ComboDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "combo") {}
     bool IsSingleType() const final { return false; }
 };
@@ -688,6 +805,20 @@ protected:
         return Vector(GetScriptForMultisig(m_threshold, keys));
     }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<MultisigDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        if (m_threshold != rightAddress->m_threshold || m_sorted != rightAddress->m_sorted) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     MultisigDescriptor(int threshold, std::vector<std::unique_ptr<PubkeyProvider>> providers, bool sorted = false) : DescriptorImpl(std::move(providers), {}, sorted ? "sortedmulti" : "multi"), m_threshold(threshold), m_sorted(sorted) {}
     bool IsSingleType() const final { return true; }
 };
@@ -698,6 +829,16 @@ class SHDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript* script, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(ScriptHash(*script))); }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<SHDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     SHDescriptor(std::unique_ptr<DescriptorImpl> desc) : DescriptorImpl({}, std::move(desc), "sh") {}
 
     Optional<OutputType> GetOutputType() const override
@@ -715,6 +856,16 @@ class WSHDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript* script, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(WitnessV0ScriptHash(*script))); }
 public:
+    bool operator== (Descriptor & rhs ) const override
+    {
+        auto rightAddress = dynamic_cast<WSHDescriptor*>(&rhs);
+        if (rightAddress == nullptr) {
+            return false;
+        }
+
+        return DescriptorImpl::operator==(*rightAddress);
+    }
+
     WSHDescriptor(std::unique_ptr<DescriptorImpl> desc) : DescriptorImpl({}, std::move(desc), "wsh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::BECH32; }
     bool IsSingleType() const final { return true; }
