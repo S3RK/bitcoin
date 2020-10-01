@@ -182,6 +182,8 @@ public:
     /** Get the descriptor string form with the xpub at the last hardened derivation */
     virtual bool ToNormalizedString(const SigningProvider& arg, std::string& out, bool priv) const = 0;
 
+    virtual bool Normalize(FlatSigningProvider &arg, std::unique_ptr<PubkeyProvider> &out) = 0;
+
     /** Derive a private key, if private data is available in arg. */
     virtual bool GetPrivKey(int pos, const SigningProvider& arg, CKey& key) const = 0;
 };
@@ -197,6 +199,25 @@ class OriginPubkeyProvider final : public PubkeyProvider
     }
 
 public:
+    bool Normalize(FlatSigningProvider &arg, std::unique_ptr<PubkeyProvider> &out) override
+    {
+        if (!m_provider->Normalize(arg, out)) return false;
+
+        // TODO: is there a better way?
+        auto test = dynamic_cast<OriginPubkeyProvider*>(out.get());
+        if (test == nullptr) {
+            out = MakeUnique<OriginPubkeyProvider>(0, m_origin, std::move(out));
+            return true;
+        }
+
+        KeyOriginInfo temp = m_origin;
+        for (auto p: test->m_origin.path) {
+            temp.path.push_back(p);
+        }
+        test->m_origin = temp;
+        return true;
+    }
+
     OriginPubkeyProvider(uint32_t exp_index, KeyOriginInfo info, std::unique_ptr<PubkeyProvider> provider) : PubkeyProvider(exp_index), m_origin(std::move(info)), m_provider(std::move(provider)) {}
     bool GetPubKey(int pos, const SigningProvider& arg, CPubKey& key, KeyOriginInfo& info, const DescriptorCache* read_cache = nullptr, DescriptorCache* write_cache = nullptr) override
     {
@@ -239,6 +260,12 @@ class ConstPubkeyProvider final : public PubkeyProvider
     CPubKey m_pubkey;
 
 public:
+    bool Normalize(FlatSigningProvider &arg, std::unique_ptr<PubkeyProvider> &out) override
+    {
+        out = MakeUnique<ConstPubkeyProvider>(0, m_pubkey);
+        return true;
+    }
+
     ConstPubkeyProvider(uint32_t exp_index, const CPubKey& pubkey) : PubkeyProvider(exp_index), m_pubkey(pubkey) {}
     bool GetPubKey(int pos, const SigningProvider& arg, CPubKey& key, KeyOriginInfo& info, const DescriptorCache* read_cache = nullptr, DescriptorCache* write_cache = nullptr) override
     {
@@ -407,6 +434,57 @@ public:
         }
         return true;
     }
+
+    bool Normalize(FlatSigningProvider &arg, std::unique_ptr<PubkeyProvider> &out) override
+    {
+        // For hardened derivation type, just return the typical string, nothing to normalize
+        if (m_derive == DeriveType::HARDENED) {
+            out = MakeUnique<BIP32PubkeyProvider>(0, m_root_extkey, m_path, m_derive);
+            return true;
+        }
+        // Step backwards to find the last hardened step in the path
+        int i = (int)m_path.size() - 1;
+        for (; i >= 0; --i) {
+            if (m_path.at(i) >> 31) {
+                break;
+            }
+        }
+        // Either no derivation or all unhardened derivation
+        if (i == -1) {
+            out = MakeUnique<BIP32PubkeyProvider>(0, m_root_extkey, m_path, m_derive);
+            return true;
+        }
+        // Derive the xpub at the last hardened step
+        CExtKey xprv;
+        if (!GetExtKey(arg, xprv)) return false;
+        KeyOriginInfo origin;
+        int k = 0;
+        for (; k <= i; ++k) {
+            // Derive
+            xprv.Derive(xprv, m_path.at(k));
+            // Add to the path
+            origin.path.push_back(m_path.at(k));
+            // First derivation element, get the fingerprint for origin
+            if (k == 0) {
+                std::copy(xprv.vchFingerprint, xprv.vchFingerprint + 4, origin.fingerprint);
+            }
+        }
+
+        // Build the remaining path
+        KeyPath end_path;
+        for (; k < (int)m_path.size(); ++k) {
+            end_path.push_back(m_path.at(k));
+        }
+
+        const auto &extPubKey = xprv.Neuter();
+        auto inner = MakeUnique<BIP32PubkeyProvider>(0, extPubKey, end_path, m_derive);
+        // TODO: uh-oh
+        arg.keys.emplace(extPubKey.pubkey.GetID(), xprv.key);
+        out = MakeUnique<OriginPubkeyProvider>(0, origin, std::move(inner));
+
+        return true;
+    }
+
     bool ToNormalizedString(const SigningProvider& arg, std::string& out, bool priv) const override
     {
         // For hardened derivation type, just return the typical string, nothing to normalize
@@ -468,6 +546,20 @@ public:
     }
 };
 
+/**
+ * 1. address
+ * 2. raw
+ *
+ * 3. combo
+ * 4. pk
+ * 5. pkh
+ * 7. wpkh
+ *
+ * 6. sh
+ * 8. wsh
+ *
+ * 9. multisig
+ */
 /** Base class for all Descriptor implementations. */
 class DescriptorImpl : public Descriptor
 {
@@ -497,6 +589,15 @@ protected:
      *  @return A vector with scriptPubKeys for this descriptor.
      */
     virtual std::vector<CScript> MakeScripts(const std::vector<CPubKey>& pubkeys, const CScript* script, FlatSigningProvider& out) const = 0;
+
+    bool NormalizePubkeyProviders(FlatSigningProvider& arg, std::vector<std::unique_ptr<PubkeyProvider>>& out) {
+        for (auto& provider: m_pubkey_args) {
+            std::unique_ptr<PubkeyProvider> ptr;
+            if (!provider->Normalize(arg, ptr)) return false;
+            out.push_back(std::move(ptr));
+        }
+        return true;
+    }
 
 public:
     DescriptorImpl(std::vector<std::unique_ptr<PubkeyProvider>> pubkeys, std::unique_ptr<DescriptorImpl> script, const std::string& name) : m_pubkey_args(std::move(pubkeys)), m_name(name), m_subdescriptor_arg(std::move(script)) {}
@@ -640,6 +741,12 @@ protected:
     std::string ToStringExtra() const override { return EncodeDestination(m_destination); }
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript*, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(m_destination)); }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        out = new AddressDescriptor(m_destination);
+        return true;
+    }
+
     AddressDescriptor(CTxDestination destination) : DescriptorImpl({}, {}, "addr"), m_destination(std::move(destination)) {}
     bool IsSolvable() const final { return false; }
 
@@ -666,6 +773,12 @@ protected:
     std::string ToStringExtra() const override { return HexStr(m_script); }
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript*, FlatSigningProvider&) const override { return Vector(m_script); }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        out = new RawDescriptor(m_script);
+        return true;
+    }
+
     RawDescriptor(CScript script) : DescriptorImpl({}, {}, "raw"), m_script(std::move(script)) {}
     bool IsSolvable() const final { return false; }
 
@@ -692,6 +805,14 @@ class PKDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>& keys, const CScript*, FlatSigningProvider&) const override { return Vector(GetScriptForRawPubKey(keys[0])); }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        std::vector<std::unique_ptr<PubkeyProvider>> normalized;
+        if (!NormalizePubkeyProviders(arg, normalized)) return false;
+        out = new PKDescriptor(std::move(normalized[0]));
+        return true;
+    }
+
     PKDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "pk") {}
     bool IsSingleType() const final { return true; }
 };
@@ -707,6 +828,14 @@ protected:
         return Vector(GetScriptForDestination(PKHash(id)));
     }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        std::vector<std::unique_ptr<PubkeyProvider>> normalized;
+        if (!NormalizePubkeyProviders(arg, normalized)) return false;
+        out = new PKHDescriptor(std::move(normalized[0]));
+        return true;
+    }
+
     PKHDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "pkh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::LEGACY; }
     bool IsSingleType() const final { return true; }
@@ -723,6 +852,14 @@ protected:
         return Vector(GetScriptForDestination(WitnessV0KeyHash(id)));
     }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        std::vector<std::unique_ptr<PubkeyProvider>> normalized;
+        if (!NormalizePubkeyProviders(arg, normalized)) return false;
+        out = new WPKHDescriptor(std::move(normalized[0]));
+        return true;
+    }
+
     WPKHDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "wpkh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::BECH32; }
     bool IsSingleType() const final { return true; }
@@ -748,6 +885,14 @@ protected:
         return ret;
     }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        std::vector<std::unique_ptr<PubkeyProvider>> normalized;
+        if (!NormalizePubkeyProviders(arg, normalized)) return false;
+        out = new ComboDescriptor(std::move(normalized[0]));
+        return true;
+    }
+
     ComboDescriptor(std::unique_ptr<PubkeyProvider> prov) : DescriptorImpl(Vector(std::move(prov)), {}, "combo") {}
     bool IsSingleType() const final { return false; }
 };
@@ -768,6 +913,14 @@ protected:
         return Vector(GetScriptForMultisig(m_threshold, keys));
     }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        std::vector<std::unique_ptr<PubkeyProvider>> normalized;
+        if (!NormalizePubkeyProviders(arg, normalized)) return false;
+        out = new MultisigDescriptor(m_threshold, std::move(normalized), m_sorted);
+        return true;
+    }
+
     MultisigDescriptor(int threshold, std::vector<std::unique_ptr<PubkeyProvider>> providers, bool sorted = false) : DescriptorImpl(std::move(providers), {}, sorted ? "sortedmulti" : "multi"), m_threshold(threshold), m_sorted(sorted) {}
     bool IsSingleType() const final { return true; }
 };
@@ -778,6 +931,14 @@ class SHDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript* script, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(ScriptHash(*script))); }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        Descriptor* temp = nullptr;
+        if (!m_subdescriptor_arg->ToNormalizedDescriptor(arg, temp)) return false;
+        out = new SHDescriptor(std::unique_ptr<DescriptorImpl>((DescriptorImpl*)temp));
+        return true;
+    }
+
     SHDescriptor(std::unique_ptr<DescriptorImpl> desc) : DescriptorImpl({}, std::move(desc), "sh") {}
 
     Optional<OutputType> GetOutputType() const override
@@ -795,6 +956,14 @@ class WSHDescriptor final : public DescriptorImpl
 protected:
     std::vector<CScript> MakeScripts(const std::vector<CPubKey>&, const CScript* script, FlatSigningProvider&) const override { return Vector(GetScriptForDestination(WitnessV0ScriptHash(*script))); }
 public:
+    bool ToNormalizedDescriptor(FlatSigningProvider& arg, Descriptor *&out) override
+    {
+        Descriptor* temp = nullptr;
+        if (!m_subdescriptor_arg->ToNormalizedDescriptor(arg, temp)) return false;
+        out = new WSHDescriptor(std::unique_ptr<DescriptorImpl>((DescriptorImpl*)temp));
+        return true;
+    }
+
     WSHDescriptor(std::unique_ptr<DescriptorImpl> desc) : DescriptorImpl({}, std::move(desc), "wsh") {}
     Optional<OutputType> GetOutputType() const override { return OutputType::BECH32; }
     bool IsSingleType() const final { return true; }

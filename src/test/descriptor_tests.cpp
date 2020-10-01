@@ -68,6 +68,8 @@ const std::set<std::vector<uint32_t>> ONLY_EMPTY{{}};
 void DoCheck(const std::string& prv, const std::string& pub, const std::string& norm_prv, const std::string& norm_pub, int flags, const std::vector<std::vector<std::string>>& scripts, const Optional<OutputType>& type, const std::set<std::vector<uint32_t>>& paths = ONLY_EMPTY,
     bool replace_apostrophe_with_h_in_prv=false, bool replace_apostrophe_with_h_in_pub=false)
 {
+    BOOST_TEST_MESSAGE("Testing " + prv);
+
     FlatSigningProvider keys_priv, keys_pub;
     std::set<std::vector<uint32_t>> left_paths = paths;
     std::string error;
@@ -114,13 +116,15 @@ void DoCheck(const std::string& prv, const std::string& pub, const std::string& 
 
     // Check that private can produce the normalized descriptors
     std::string norm1;
-    BOOST_CHECK(parse_priv->ToNormalizedString(keys_priv, norm1, false));
-    BOOST_CHECK(EqualDescriptor(norm1, norm_pub));
-    BOOST_CHECK(parse_pub->ToNormalizedString(keys_priv, norm1, false));
-    BOOST_CHECK(EqualDescriptor(norm1, norm_pub));
-    BOOST_CHECK(parse_priv->ToNormalizedString(keys_priv, norm1, true));
+    Descriptor* d = {};
+    BOOST_CHECK(parse_priv->ToNormalizedDescriptor(keys_priv, d));
+    BOOST_CHECK(EqualDescriptor(d->ToString(), norm_pub));
+    BOOST_CHECK(d->ToPrivateString(keys_priv, norm1));
     BOOST_CHECK(EqualDescriptor(norm1, norm_prv));
-    BOOST_CHECK(parse_pub->ToNormalizedString(keys_priv, norm1, true));
+
+    BOOST_CHECK(parse_pub->ToNormalizedDescriptor(keys_priv, d));
+    BOOST_CHECK(EqualDescriptor(d->ToString(), norm_pub));
+    BOOST_CHECK(d->ToPrivateString(keys_priv, norm1));
     BOOST_CHECK(EqualDescriptor(norm1, norm_prv));
 
     // Check whether IsRange on both returns the expected result

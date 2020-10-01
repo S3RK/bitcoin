@@ -2265,5 +2265,13 @@ bool DescriptorScriptPubKeyMan::GetDescriptorString(std::string& out, bool priv)
     FlatSigningProvider provider;
     provider.keys = GetKeys();
 
-    return m_wallet_descriptor.descriptor->ToNormalizedString(provider, out, priv);
+    Descriptor* descriptor;
+    if (!m_wallet_descriptor.descriptor->ToNormalizedDescriptor(provider, descriptor)) return false;
+
+    if (priv) {
+        return descriptor->ToPrivateString(provider, out);
+    } else {
+        out = descriptor->ToString();
+        return true;
+    }
 }
