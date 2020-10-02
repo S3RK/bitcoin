@@ -361,7 +361,6 @@ std::unique_ptr<DatabaseBatch> SQLiteDatabase::MakeBatch(const char* mode, bool 
 SQLiteBatch::SQLiteBatch(SQLiteDatabase& database, const char* mode)
     : m_database(database)
 {
-    m_read_only = (!strchr(mode, '+') && !strchr(mode, 'w'));
     m_database.AddRef();
     const bool create = strchr(mode, 'c') != nullptr;
     m_database.Open(create);
@@ -408,7 +407,6 @@ bool SQLiteBatch::ReadKey(CDataStream&& key, CDataStream& value)
 bool SQLiteBatch::WriteKey(CDataStream&& key, CDataStream&& value, bool overwrite)
 {
     if (!m_database.m_db) return false;
-    if (m_read_only) throw std::runtime_error("Write called on database in read-only mode");
     assert(m_database.m_insert_stmt && m_database.m_overwrite_stmt);
 
     sqlite3_stmt* stmt;
@@ -443,7 +441,6 @@ bool SQLiteBatch::WriteKey(CDataStream&& key, CDataStream&& value, bool overwrit
 bool SQLiteBatch::EraseKey(CDataStream&& key)
 {
     if (!m_database.m_db) return false;
-    if (m_read_only) throw std::runtime_error("Erase called on database in read-only mode");
     assert(m_database.m_delete_stmt);
 
     // Bind: leftmost parameter in statement is index 1
