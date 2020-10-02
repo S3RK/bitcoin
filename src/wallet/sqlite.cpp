@@ -216,15 +216,8 @@ void SQLiteDatabase::Open(const char* mode)
         throw std::runtime_error("Cannot obtain a lock on wallet directory");
     }
 
-    const bool read_only = (!strchr(mode, '+') && !strchr(mode, 'w'));
-
     const bool create = strchr(mode, 'c') != nullptr;
-    int flags;
-    if (read_only) {
-        flags = SQLITE_OPEN_READONLY;
-    } else {
-        flags = SQLITE_OPEN_READWRITE;
-    }
+    int flags = SQLITE_OPEN_READWRITE;
     if (create) {
         flags |= SQLITE_OPEN_CREATE;
     }
@@ -273,7 +266,7 @@ void SQLiteDatabase::Open(const char* mode)
 
         m_db = db;
     }
-    if (!read_only && sqlite3_db_readonly(m_db, "main") != 0) {
+    if (sqlite3_db_readonly(m_db, "main") != 0) {
         throw std::runtime_error(strprintf("SQLiteDatabase: SQLiteBatch requested read-write permission but database only has readonly"));
     }
     SetupSQLStatements();
