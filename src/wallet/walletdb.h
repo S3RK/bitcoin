@@ -16,7 +16,6 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
-#include <string.h>
 
 /**
  * Overview of wallet database classes:
@@ -205,8 +204,8 @@ private:
     }
 
 public:
-    explicit WalletBatch(WalletDatabase& database, const char* pszMode = "r+", bool _fFlushOnClose = true) :
-        m_batch(database.MakeBatch(strchr(pszMode, 'c') != nullptr, _fFlushOnClose)),
+    explicit WalletBatch(WalletDatabase& database, const bool create = false, bool _fFlushOnClose = true) :
+        m_batch(database.MakeBatch(create, _fFlushOnClose)),
         m_database(database)
     {
     }
