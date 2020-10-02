@@ -352,10 +352,9 @@ void SQLiteDatabase::AddRef()
     m_refcount++;
 }
 
-std::unique_ptr<DatabaseBatch> SQLiteDatabase::MakeBatch(const char* mode, bool flush_on_close)
+std::unique_ptr<DatabaseBatch> SQLiteDatabase::MakeBatch(const bool create, bool flush_on_close)
 {
     // We ignore flush_on_close because we don't do manual flushing for SQLite
-    const bool create = strchr(mode, 'c') != nullptr;
     return MakeUnique<SQLiteBatch>(*this, create);
 }
 

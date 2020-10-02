@@ -150,7 +150,7 @@ public:
     int64_t nLastWalletUpdate;
 
     /** Make a DatabaseBatch connected to this database */
-    virtual std::unique_ptr<DatabaseBatch> MakeBatch(const char* mode = "r+", bool flush_on_close = true) = 0;
+    virtual std::unique_ptr<DatabaseBatch> MakeBatch(const bool create = false, bool flush_on_close = true) = 0;
 };
 
 /** RAII class that provides access to a DummyDatabase. Never fails. */
@@ -190,7 +190,7 @@ public:
     void IncrementUpdateCounter() override { ++nUpdateCounter; }
     void ReloadDbEnv() override {}
     std::string Filename() override { return "dummy"; }
-    std::unique_ptr<DatabaseBatch> MakeBatch(const char* mode = "r+", bool flush_on_close = true) override { return MakeUnique<DummyBatch>(); }
+    std::unique_ptr<DatabaseBatch> MakeBatch(const bool create, bool flush_on_close = true) override { return MakeUnique<DummyBatch>(); }
 };
 
 enum class DatabaseFormat {

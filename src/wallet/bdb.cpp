@@ -805,10 +805,9 @@ void BerkeleyDatabase::RemoveRef()
     if (env) env->m_db_in_use.notify_all();
 }
 
-std::unique_ptr<DatabaseBatch> BerkeleyDatabase::MakeBatch(const char* mode, bool flush_on_close)
+std::unique_ptr<DatabaseBatch> BerkeleyDatabase::MakeBatch(const bool create, bool flush_on_close)
 {
-    bool fCreate = strchr(mode, 'c') != nullptr;
-    return MakeUnique<BerkeleyBatch>(*this, fCreate, false, flush_on_close);
+    return MakeUnique<BerkeleyBatch>(*this, create, false, flush_on_close);
 }
 
 bool ExistsBerkeleyDatabase(const fs::path& path)

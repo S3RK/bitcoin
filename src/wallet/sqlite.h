@@ -98,7 +98,7 @@ public:
     std::string Filename() override { return m_file_path; };
 
     /** Make a SQLiteBatch connected to this database */
-    std::unique_ptr<DatabaseBatch> MakeBatch(const char* mode = "r+", bool flush_on_close = true) override;
+    std::unique_ptr<DatabaseBatch> MakeBatch(const bool create = false, bool flush_on_close = true) override;
 
     sqlite3* m_db{nullptr};
 

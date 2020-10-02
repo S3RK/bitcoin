@@ -164,7 +164,7 @@ public:
     std::string strFile;
 
     /** Make a BerkeleyBatch connected to this database */
-    std::unique_ptr<DatabaseBatch> MakeBatch(const char* mode = "r+", bool flush_on_close = true) override;
+    std::unique_ptr<DatabaseBatch> MakeBatch(const bool create = false, bool flush_on_close = true) override;
 };
 
 /** RAII class that provides access to a Berkeley database */
