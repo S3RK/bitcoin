@@ -26,7 +26,7 @@ private:
     bool HasKey(CDataStream&& key) override;
 
 public:
-    explicit SQLiteBatch(SQLiteDatabase& database, const char* mode);
+    explicit SQLiteBatch(SQLiteDatabase& database, const bool create);
     ~SQLiteBatch() override { Close(); }
 
     void Flush() override;

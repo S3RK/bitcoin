@@ -305,21 +305,20 @@ BerkeleyDatabase::~BerkeleyDatabase()
     }
 }
 
-BerkeleyBatch::BerkeleyBatch(BerkeleyDatabase& database, const char* pszMode, bool fFlushOnCloseIn) : pdb(nullptr), activeTxn(nullptr), m_cursor(nullptr), m_database(database)
+BerkeleyBatch::BerkeleyBatch(BerkeleyDatabase& database, const bool fCreate, const bool fReadOnly, bool fFlushOnCloseIn) : pdb(nullptr), activeTxn(nullptr), m_cursor(nullptr), m_database(database)
 {
     database.AddRef();
-    bool fCreate = strchr(pszMode, 'c') != nullptr;
     database.Open(fCreate);
-    fReadOnly = (!strchr(pszMode, '+') && !strchr(pszMode, 'w'));
+    this->fReadOnly = fReadOnly;
     fFlushOnClose = fFlushOnCloseIn;
     env = database.env.get();
     pdb = database.m_db.get();
     strFile = database.strFile;
     if (fCreate && !Exists(std::string("version"))) {
         bool fTmp = fReadOnly;
-        fReadOnly = false;
+        this->fReadOnly = false;
         Write(std::string("version"), CLIENT_VERSION);
-        fReadOnly = fTmp;
+        this->fReadOnly = fTmp;
     }
 }
 
@@ -467,7 +466,7 @@ bool BerkeleyDatabase::Rewrite(const char* pszSkip)
                 LogPrintf("BerkeleyBatch::Rewrite: Rewriting %s...\n", strFile);
                 std::string strFileRes = strFile + ".rewrite";
                 { // surround usage of db with extra {}
-                    BerkeleyBatch db(*this, "r");
+                    BerkeleyBatch db(*this, false, true);
                     std::unique_ptr<Db> pdbCopy = MakeUnique<Db>(env->dbenv.get(), 0);
 
                     int ret = pdbCopy->open(nullptr,               // Txn pointer
@@ -808,7 +807,8 @@ void BerkeleyDatabase::RemoveRef()
 
 std::unique_ptr<DatabaseBatch> BerkeleyDatabase::MakeBatch(const char* mode, bool flush_on_close)
 {
-    return MakeUnique<BerkeleyBatch>(*this, mode, flush_on_close);
+    bool fCreate = strchr(mode, 'c') != nullptr;
+    return MakeUnique<BerkeleyBatch>(*this, fCreate, false, flush_on_close);
 }
 
 bool ExistsBerkeleyDatabase(const fs::path& path)

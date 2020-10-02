@@ -207,7 +207,7 @@ protected:
     BerkeleyDatabase& m_database;
 
 public:
-    explicit BerkeleyBatch(BerkeleyDatabase& database, const char* pszMode = "r+", bool fFlushOnCloseIn=true);
+    explicit BerkeleyBatch(BerkeleyDatabase& database, const bool fCreate, const bool fReadOnly, bool fFlushOnCloseIn=true);
     ~BerkeleyBatch() override;
 
     BerkeleyBatch(const BerkeleyBatch&) = delete;
