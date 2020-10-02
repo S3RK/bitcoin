@@ -308,13 +308,13 @@ BerkeleyDatabase::~BerkeleyDatabase()
 BerkeleyBatch::BerkeleyBatch(BerkeleyDatabase& database, const char* pszMode, bool fFlushOnCloseIn) : pdb(nullptr), activeTxn(nullptr), m_cursor(nullptr), m_database(database)
 {
     database.AddRef();
-    database.Open(pszMode);
+    bool fCreate = strchr(pszMode, 'c') != nullptr;
+    database.Open(fCreate);
     fReadOnly = (!strchr(pszMode, '+') && !strchr(pszMode, 'w'));
     fFlushOnClose = fFlushOnCloseIn;
     env = database.env.get();
     pdb = database.m_db.get();
     strFile = database.strFile;
-    bool fCreate = strchr(pszMode, 'c') != nullptr;
     if (fCreate && !Exists(std::string("version"))) {
         bool fTmp = fReadOnly;
         fReadOnly = false;
@@ -323,11 +323,10 @@ BerkeleyBatch::BerkeleyBatch(BerkeleyDatabase& database, const char* pszMode, bo
     }
 }
 
-void BerkeleyDatabase::Open(const char* pszMode)
+void BerkeleyDatabase::Open(const bool create)
 {
-    bool fCreate = strchr(pszMode, 'c') != nullptr;
     unsigned int nFlags = DB_THREAD;
-    if (fCreate)
+    if (create)
         nFlags |= DB_CREATE;
 
     {

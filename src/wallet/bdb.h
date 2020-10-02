@@ -111,7 +111,7 @@ public:
 
     /** Open the database if it is not already opened.
      *  Dummy function, doesn't do anything right now, but is needed for class abstraction */
-    void Open(const char* mode) override;
+    void Open(const bool create) override;
 
     /** Rewrite the entire database on disk, with the exception of key pszSkip if non-zero
      */

@@ -109,7 +109,7 @@ public:
     virtual ~WalletDatabase() {};
 
     /** Open the database if it is not already opened. */
-    virtual void Open(const char* mode) = 0;
+    virtual void Open(const bool create) = 0;
 
     //! Counts the number of active database users to be sure that the database is not closed while someone is using it
     std::atomic<int> m_refcount{0};
@@ -179,7 +179,7 @@ public:
 class DummyDatabase : public WalletDatabase
 {
 public:
-    void Open(const char* mode) override {};
+    void Open(const bool create) override {};
     void AddRef() override {}
     void RemoveRef() override {}
     bool Rewrite(const char* pszSkip=nullptr) override { return true; }

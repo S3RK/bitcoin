@@ -210,13 +210,12 @@ bool SQLiteDatabase::Verify(bilingual_str& error)
     return error.original.empty();
 }
 
-void SQLiteDatabase::Open(const char* mode)
+void SQLiteDatabase::Open(const bool create)
 {
     if (!PrepareDirectory()) {
         throw std::runtime_error("Cannot obtain a lock on wallet directory");
     }
 
-    const bool create = strchr(mode, 'c') != nullptr;
     int flags = SQLITE_OPEN_READWRITE;
     if (create) {
         flags |= SQLITE_OPEN_CREATE;
@@ -364,7 +363,8 @@ SQLiteBatch::SQLiteBatch(SQLiteDatabase& database, const char* mode)
 {
     m_read_only = (!strchr(mode, '+') && !strchr(mode, 'w'));
     m_database.AddRef();
-    m_database.Open(mode);
+    const bool create = strchr(mode, 'c') != nullptr;
+    m_database.Open(create);
 }
 
 void SQLiteBatch::Flush() {}
