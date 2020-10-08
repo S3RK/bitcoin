@@ -202,6 +202,17 @@ void UnloadWallet(std::shared_ptr<CWallet>&& wallet)
 namespace {
 std::shared_ptr<CWallet> LoadWalletInternal(interfaces::Chain& chain, const std::string& name, Optional<bool> load_on_start, const DatabaseOptions& options, DatabaseStatus& status, bilingual_str& error, std::vector<bilingual_str>& warnings)
 {
+    {
+        LOCK(cs_wallets);
+        // TODO: change vector to hash table
+        for (auto &wallet: vpwallets) {
+            if (name == wallet->GetName()) {
+                error = Untranslated("Wallet is already loaded.");
+                return nullptr;
+            }
+        }
+    }
+
     try {
         std::unique_ptr<WalletDatabase> database = MakeWalletDatabase(name, options, status, error);
         if (!database) {

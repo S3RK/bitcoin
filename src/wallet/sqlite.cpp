@@ -116,7 +116,10 @@ SQLiteDatabase::~SQLiteDatabase()
 
 bool SQLiteDatabase::Verify(bilingual_str& error)
 {
-    if (!PrepareDirectory()) return false;
+    if (!PrepareDirectory()) {
+        error = strprintf(_("Error initializing wallet database environment %s!"), m_dir_path);
+        return false;
+    }
 
     sqlite3* db = nullptr;
     int ret = sqlite3_open_v2(m_file_path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr);
