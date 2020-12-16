@@ -3967,11 +3967,6 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
                                _("This is the transaction fee you will pay if you send a transaction."));
         }
         walletInstance->m_pay_tx_fee = CFeeRate(nFeePerK, 1000);
-        if (walletInstance->m_pay_tx_fee < chain.relayMinFee()) {
-            error = strprintf(_("Invalid amount for -paytxfee=<amount>: '%s' (must be at least %s)"),
-                gArgs.GetArg("-paytxfee", ""), chain.relayMinFee().ToString());
-            return nullptr;
-        }
     }
 
     if (gArgs.IsArgSet("-maxtxfee")) {
@@ -3983,17 +3978,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
         if (nMaxFee > HIGH_MAX_TX_FEE) {
             warnings.push_back(_("-maxtxfee is set very high! Fees this large could be paid on a single transaction."));
         }
-        if (CFeeRate(nMaxFee, 1000) < chain.relayMinFee()) {
-            error = strprintf(_("Invalid amount for -maxtxfee=<amount>: '%s' (must be at least the minrelay fee of %s to prevent stuck transactions)"),
-                gArgs.GetArg("-maxtxfee", ""), chain.relayMinFee().ToString());
-            return nullptr;
-        }
         walletInstance->m_default_max_tx_fee = nMaxFee;
-    }
-
-    if (chain.relayMinFee().GetFeePerK() > HIGH_TX_FEE_PER_KB) {
-        warnings.push_back(AmountHighWarn("-minrelaytxfee") + Untranslated(" ") +
-                           _("The wallet will avoid paying less than the minimum relay fee."));
     }
 
     walletInstance->m_confirm_target = gArgs.GetArg("-txconfirmtarget", DEFAULT_TX_CONFIRM_TARGET);
@@ -4091,6 +4076,21 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
     auto& chain = wallet->chain();
     auto& walletInstance = wallet;
     LOCK(walletInstance->cs_wallet);
+
+    if (gArgs.IsArgSet("-paytxfee") && walletInstance->m_pay_tx_fee < chain.relayMinFee()) {
+        error = strprintf(_("Invalid amount for -paytxfee=<amount>: '%s' (must be at least %s)"),
+                          gArgs.GetArg("-paytxfee", ""), chain.relayMinFee().ToString());
+        return false;
+    }
+    if (CFeeRate(walletInstance->m_default_max_tx_fee, 1000) < chain.relayMinFee()) {
+        error = strprintf(_("Invalid amount for -maxtxfee=<amount>: '%s' (must be at least the minrelay fee of %s to prevent stuck transactions)"),
+                          gArgs.GetArg("-maxtxfee", ""), chain.relayMinFee().ToString());
+        return false;
+    }
+    if (chain.relayMinFee().GetFeePerK() > HIGH_TX_FEE_PER_KB) {
+        warnings.push_back(AmountHighWarn("-minrelaytxfee") + Untranslated(" ") +
+                           _("The wallet will avoid paying less than the minimum relay fee."));
+    }
 
     if (walletInstance->m_first_run) {
         walletInstance->chainStateFlushed(chain.getTipLocator());
