@@ -3871,8 +3871,6 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
                 }
             }
         }
-
-        walletInstance->chainStateFlushed(chain.getTipLocator());
     } else if (wallet_creation_flags & WALLET_FLAG_DISABLE_PRIVATE_KEYS) {
         // Make it impossible to disable private keys after creation
         error = strprintf(_("Error loading %s: Private keys can only be disabled during creation"), walletFile);
@@ -4093,6 +4091,10 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
     auto& chain = wallet->chain();
     auto& walletInstance = wallet;
     LOCK(walletInstance->cs_wallet);
+
+    if (walletInstance->m_first_run) {
+        walletInstance->chainStateFlushed(chain.getTipLocator());
+    }
 
     // Register wallet with validationinterface. It's done before rescan to avoid
     // missing block connections between end of rescan and validation subscribing.
