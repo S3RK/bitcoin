@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <util/translation.h>
 #include <wallet/test/wallet_test_fixture.h>
 
 WalletTestingSetup::WalletTestingSetup(const std::string& chainName)
@@ -9,6 +10,8 @@ WalletTestingSetup::WalletTestingSetup(const std::string& chainName)
       m_wallet(m_chain.get(), "", CreateMockWalletDatabase())
 {
     m_wallet.LoadWallet();
-    CWallet::AttachChain({ &m_wallet, [](CWallet*) {} });
+    bilingual_str error;
+    std::vector<bilingual_str> warnings;
+    m_wallet.AttachChain(*m_chain.get(), error, warnings);
     m_wallet_client->registerRpcs();
 }

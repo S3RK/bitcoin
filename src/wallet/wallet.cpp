@@ -3992,18 +3992,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
 
     LOCK(walletInstance->cs_wallet);
 
-    CWallet::ScanStatus scan_status = CWallet::AttachChain(walletInstance, !walletInstance->m_first_run);
-    if (scan_status == CWallet::ScanStatus::FAILED) {
-        error = _("Failed to rescan the wallet during initialization");
-        return nullptr;
-    } else if (scan_status == CWallet::ScanStatus::MISSING_BLOCKS) {
-        // We can't rescan beyond non-pruned blocks, stop and throw an error.
-        // This might happen if a user uses an old wallet within a pruned node
-        // or if they ran -disablewallet for a longer time, then decided to re-enable
-        // Exit early and print an error.
-        // If a block is pruned after this check, we will load the wallet,
-        // but fail the rescan with a generic error.
-        error = _("Prune: last wallet synchronisation goes beyond pruned data. You need to -reindex (download the whole blockchain again in case of pruned node)");
+    if (!walletInstance->AttachChain(chain, error, warnings)) {
         return nullptr;
     }
 
@@ -4071,10 +4060,10 @@ bool CWallet::UpgradeWallet(int version, bilingual_str& error, std::vector<bilin
     return true;
 }
 
-CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool scan)
+bool CWallet::AttachChain(interfaces::Chain& chain, bilingual_str &error, std::vector<bilingual_str> &warnings)
 {
-    auto& chain = wallet->chain();
-    auto& walletInstance = wallet;
+    this->m_chain = &chain;
+    auto walletInstance = this;
     LOCK(walletInstance->cs_wallet);
 
     if (gArgs.IsArgSet("-paytxfee") && walletInstance->m_pay_tx_fee < chain.relayMinFee()) {
@@ -4104,7 +4093,7 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
     // but we guarantee at least than wallet state is correct after notifications delivery.
     // This is temporary until rescan and notifications delivery are unified under same
     // interface.
-    walletInstance->m_chain_notifications_handler = walletInstance->chain().handleNotifications(walletInstance);
+    walletInstance->m_chain_notifications_handler = walletInstance->chain().handleNotifications({this, [](CWallet*) {}});
 
     int rescan_height = 0;
     if (!gArgs.GetBoolArg("-rescan", false))
@@ -4127,7 +4116,6 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
         walletInstance->m_last_block_processed_height = -1;
     }
 
-    ScanStatus scan_status = ScanStatus::SKIPPED;
     if (tip_height && *tip_height != rescan_height)
     {
         if (chain.havePruned()) {
@@ -4137,7 +4125,14 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
             }
 
             if (rescan_height != block_height) {
-                return CWallet::ScanStatus::MISSING_BLOCKS;
+                // We can't rescan beyond non-pruned blocks, stop and throw an error.
+                // This might happen if a user uses an old wallet within a pruned node
+                // or if they ran -disablewallet for a longer time, then decided to re-enable
+                // Exit early and print an error.
+                // If a block is pruned after this check, we will load the wallet,
+                // but fail the rescan with a generic error.
+                error = _("Prune: last wallet synchronisation goes beyond pruned data. You need to -reindex (download the whole blockchain again in case of pruned node)");
+                return false;
             }
         }
 
@@ -4161,15 +4156,15 @@ CWallet::ScanStatus CWallet::AttachChain(std::shared_ptr<CWallet> wallet, bool s
         {
             WalletRescanReserver reserver(*walletInstance);
             if (!reserver.reserve() || (ScanResult::SUCCESS != walletInstance->ScanForWalletTransactions(chain.getBlockHash(rescan_height), rescan_height, {} /* max height */, reserver, true /* update */).status)) {
-                return CWallet::ScanStatus::FAILED;
+                error = _("Failed to rescan the wallet during initialization");
+                return false;
             }
-            scan_status = ScanStatus::SUCCESS;
         }
         walletInstance->chainStateFlushed(chain.getTipLocator());
         walletInstance->database->IncrementUpdateCounter();
     }
 
-    return scan_status;
+    return true;
 }
 
 void CWallet::postInitProcess()

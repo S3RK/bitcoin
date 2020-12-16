@@ -9,6 +9,7 @@
 #include <test/util/mining.h>
 #include <test/util/setup_common.h>
 #include <test/util/wallet.h>
+#include <util/translation.h>
 #include <validationinterface.h>
 #include <wallet/wallet.h>
 
@@ -31,7 +32,9 @@ static void WalletBalance(benchmark::Bench& bench, const bool set_dirty, const b
         wallet.SetupLegacyScriptPubKeyMan();
         if (wallet.LoadWallet() != DBErrors::LOAD_OK) assert(false);
     }
-    CWallet::AttachChain({&wallet, [](CWallet*) {}});
+    bilingual_str error;
+    std::vector<bilingual_str> warnings;
+    wallet.AttachChain(*chain.get(), error, warnings);
 
     const Optional<std::string> address_mine{add_mine ? Optional<std::string>{getnewaddress(wallet)} : nullopt};
     if (add_watchonly) importaddress(wallet, ADDRESS_WATCHONLY);
