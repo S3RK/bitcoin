@@ -43,6 +43,7 @@ static std::shared_ptr<CWallet> TestLoadWallet(interfaces::Chain& chain)
     std::vector<bilingual_str> warnings;
     auto database = MakeWalletDatabase("", options, status, error);
     auto wallet = CWallet::Create(chain, "", std::move(database), options.create_flags, error, warnings);
+    wallet->AttachChain(chain, error, warnings);
     wallet->postInitProcess();
     return wallet;
 }

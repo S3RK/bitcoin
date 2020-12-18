@@ -217,6 +217,11 @@ std::shared_ptr<CWallet> LoadWalletInternal(interfaces::Chain& chain, const std:
             status = DatabaseStatus::FAILED_LOAD;
             return nullptr;
         }
+        if (!wallet->AttachChain(chain, error, warnings)) {
+            error = Untranslated("Wallet creation failed.") + Untranslated(" ") + error;
+            status = DatabaseStatus::FAILED_LOAD;
+            return nullptr;
+        }
         AddWallet(wallet);
         wallet->postInitProcess();
 
@@ -279,6 +284,11 @@ std::shared_ptr<CWallet> CreateWallet(interfaces::Chain& chain, const std::strin
     chain.initMessage(_("Loading wallet...").translated);
     std::shared_ptr<CWallet> wallet = CWallet::Create(chain, name, std::move(database), wallet_creation_flags, error, warnings);
     if (!wallet) {
+        error = Untranslated("Wallet creation failed.") + Untranslated(" ") + error;
+        status = DatabaseStatus::FAILED_CREATE;
+        return nullptr;
+    }
+    if (!wallet->AttachChain(chain, error, warnings)) {
         error = Untranslated("Wallet creation failed.") + Untranslated(" ") + error;
         status = DatabaseStatus::FAILED_CREATE;
         return nullptr;
@@ -3991,10 +4001,6 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
     walletInstance->TopUpKeyPool();
 
     LOCK(walletInstance->cs_wallet);
-
-    if (!walletInstance->AttachChain(chain, error, warnings)) {
-        return nullptr;
-    }
 
     {
         LOCK(cs_wallets);

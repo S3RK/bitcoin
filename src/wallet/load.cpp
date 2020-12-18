@@ -112,6 +112,12 @@ bool LoadWallets(interfaces::Chain& chain)
                 chain.initError(error);
                 return false;
             }
+            bool success = !pwallet->AttachChain(chain, error, warnings);
+            if (!warnings.empty()) chain.initWarning(Join(warnings, Untranslated("\n")));
+            if (!success) {
+                chain.initError(error);
+                return false;
+            }
             AddWallet(pwallet);
         }
         return true;
