@@ -27,7 +27,7 @@ static void WalletBalance(benchmark::Bench& bench, const bool set_dirty, const b
 
     NodeContext node;
     std::unique_ptr<interfaces::Chain> chain = interfaces::MakeChain(node);
-    CWallet wallet{chain.get(), "", CreateMockWalletDatabase()};
+    CWallet wallet{"", CreateMockWalletDatabase()};
     {
         wallet.SetupLegacyScriptPubKeyMan();
         if (wallet.LoadWallet() != DBErrors::LOAD_OK) assert(false);

@@ -7,7 +7,7 @@
 
 WalletTestingSetup::WalletTestingSetup(const std::string& chainName)
     : TestingSetup(chainName),
-      m_wallet(m_chain.get(), "", CreateMockWalletDatabase())
+      m_wallet("", CreateMockWalletDatabase())
 {
     m_wallet.LoadWallet();
     bilingual_str error;

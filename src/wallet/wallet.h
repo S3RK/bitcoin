@@ -762,9 +762,8 @@ public:
     unsigned int nMasterKeyMaxID = 0;
 
     /** Construct wallet with specified name and database implementation. */
-    CWallet(interfaces::Chain* chain, const std::string& name, std::unique_ptr<WalletDatabase> database)
-        : m_chain(chain),
-          m_name(name),
+    CWallet(const std::string& name, std::unique_ptr<WalletDatabase> database)
+        : m_name(name),
           database(std::move(database))
     {
     }

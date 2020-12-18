@@ -27,9 +27,7 @@ BOOST_FIXTURE_TEST_SUITE(coinselector_tests, WalletTestingSetup)
 typedef std::set<CInputCoin> CoinSet;
 
 static std::vector<COutput> vCoins;
-static NodeContext testNode;
-static auto testChain = interfaces::MakeChain(testNode);
-static CWallet testWallet(testChain.get(), "", CreateDummyWalletDatabase());
+static CWallet testWallet("", CreateDummyWalletDatabase());
 static CAmount balance = 0;
 
 CoinEligibilityFilter filter_standard(1, 6, 0);
@@ -283,7 +281,7 @@ BOOST_AUTO_TEST_CASE(bnb_search_test)
     // Make sure that can use BnB when there are preset inputs
     empty_wallet();
     {
-        std::unique_ptr<CWallet> wallet = MakeUnique<CWallet>(m_chain.get(), "", CreateMockWalletDatabase());
+        std::unique_ptr<CWallet> wallet = MakeUnique<CWallet>("", CreateMockWalletDatabase());
         wallet->LoadWallet();
         wallet->SetupLegacyScriptPubKeyMan();
         LOCK(wallet->cs_wallet);
