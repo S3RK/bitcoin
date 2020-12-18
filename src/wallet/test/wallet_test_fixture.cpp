@@ -8,8 +8,7 @@ WalletTestingSetup::WalletTestingSetup(const std::string& chainName)
     : TestingSetup(chainName),
       m_wallet(m_chain.get(), "", CreateMockWalletDatabase())
 {
-    bool fFirstRun;
-    m_wallet.LoadWallet(fFirstRun);
+    m_wallet.LoadWallet();
     CWallet::AttachChain({ &m_wallet, [](CWallet*) {} });
     m_wallet_client->registerRpcs();
 }

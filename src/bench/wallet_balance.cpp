@@ -29,8 +29,7 @@ static void WalletBalance(benchmark::Bench& bench, const bool set_dirty, const b
     CWallet wallet{chain.get(), "", CreateMockWalletDatabase()};
     {
         wallet.SetupLegacyScriptPubKeyMan();
-        bool first_run;
-        if (wallet.LoadWallet(first_run) != DBErrors::LOAD_OK) assert(false);
+        if (wallet.LoadWallet() != DBErrors::LOAD_OK) assert(false);
     }
     CWallet::AttachChain({&wallet, [](CWallet*) {}});
 

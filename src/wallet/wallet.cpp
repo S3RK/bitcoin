@@ -3188,11 +3188,10 @@ void CWallet::CommitTransaction(CTransactionRef tx, mapValue_t mapValue, std::ve
     }
 }
 
-DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
+DBErrors CWallet::LoadWallet()
 {
     LOCK(cs_wallet);
 
-    fFirstRunRet = false;
     DBErrors nLoadWalletRet = WalletBatch(*database).LoadWallet(this);
     if (nLoadWalletRet == DBErrors::NEED_REWRITE)
     {
@@ -3205,8 +3204,8 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     }
 
     // This wallet is in its first run if there are no ScriptPubKeyMans and it isn't blank or no privkeys
-    fFirstRunRet = m_spk_managers.empty() && !IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS) && !IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET);
-    if (fFirstRunRet) {
+    m_first_run = m_spk_managers.empty() && !IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS) && !IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET);
+    if (m_first_run) {
         assert(m_external_spk_managers.empty());
         assert(m_internal_spk_managers.empty());
     }
@@ -3815,11 +3814,10 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
     chain.initMessage(_("Loading wallet...").translated);
 
     int64_t nStart = GetTimeMillis();
-    bool fFirstRun = true;
     // TODO: Can't use std::make_shared because we need a custom deleter but
     // should be possible to use std::allocate_shared.
     std::shared_ptr<CWallet> walletInstance(new CWallet(&chain, name, std::move(database)), ReleaseWallet);
-    DBErrors nLoadWalletRet = walletInstance->LoadWallet(fFirstRun);
+    DBErrors nLoadWalletRet = walletInstance->LoadWallet();
     if (nLoadWalletRet != DBErrors::LOAD_OK) {
         if (nLoadWalletRet == DBErrors::CORRUPT) {
             error = strprintf(_("Error loading %s: Wallet corrupted"), walletFile);
@@ -3846,7 +3844,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
         }
     }
 
-    if (fFirstRun)
+    if (walletInstance->m_first_run)
     {
         // ensure this wallet.dat can only be opened by clients supporting HD with chain split and expects no default key
         walletInstance->SetMinVersion(FEATURE_LATEST);
@@ -4011,7 +4009,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain& chain, const std::st
 
     LOCK(walletInstance->cs_wallet);
 
-    CWallet::ScanStatus scan_status = CWallet::AttachChain(walletInstance, !fFirstRun);
+    CWallet::ScanStatus scan_status = CWallet::AttachChain(walletInstance, !walletInstance->m_first_run);
     if (scan_status == CWallet::ScanStatus::FAILED) {
         error = _("Failed to rescan the wallet during initialization");
         return nullptr;
