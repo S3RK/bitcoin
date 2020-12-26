@@ -919,7 +919,7 @@ CWalletTx* CWallet::AddToWallet(CTransactionRef tx, const CWalletTx::Confirmatio
         } else {
             assert(wtx.m_confirm.nIndex == confirm.nIndex);
             assert(wtx.m_confirm.hashBlock == confirm.hashBlock);
-            assert(wtx.m_confirm.block_height == confirm.block_height);
+//            assert(wtx.m_confirm.block_height == confirm.block_height);
         }
         // If we have a witness-stripped version of this transaction, and we
         // see a new version with a witness, then we must be upgrading a pre-segwit
