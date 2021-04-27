@@ -213,7 +213,25 @@ class ExampleTest(BitcoinTestFramework):
         with p2p_lock:
             for block in peer_receiving.block_receive_map.values():
                 assert_equal(block, 1)
+        
+        tip1 = self.nodes[1].getblock(self.nodes[1].getbestblockhash())
+        self.log.info("Node1 tip is #{}({})".format(tip1['height'], tip1['hash']))
 
+        self.log.info("Mine one more block on node1")
+        new_tip = self.nodes[0].generate(nblocks=1)[0]
+        self.log.info("Block " + new_tip + " has been mined")
+
+        tip1 = self.nodes[1].getblock(self.nodes[1].getbestblockhash())
+        self.log.info("Node1 tip is #{}({})".format(tip1['height'], tip1['hash']))
+
+        self.log.info("Wait for the block to sync to node2")
+        self.nodes[2].waitforblockheight(tip1['height'])
+
+        tip2 = self.nodes[2].getblock(self.nodes[2].getbestblockhash())
+        self.log.info("Node2 tip is #{}({})".format(tip2['height'], tip2['hash']))
+
+        self.log.info("Verify tips are the same")
+        assert_equal(tip1['hash'], tip2['hash'])
 
 if __name__ == '__main__':
     ExampleTest().main()
